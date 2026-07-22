@@ -9,11 +9,13 @@ import (
 	"time"
 
 	"github.com/Isvane/gohan/internal/api"
+	"github.com/Isvane/gohan/internal/repository"
 )
 
 func main() {
+	repo := repository.NewUserRepo()
 	db := &api.Database{
-		UserInfo: make(map[string]int),
+		Repo: repo,
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)

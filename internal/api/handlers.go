@@ -5,14 +5,13 @@ import (
 	"fmt"
 	"html"
 	"net/http"
-	"sync"
 
 	models "github.com/Isvane/gohan/internal/model"
+	"github.com/Isvane/gohan/internal/repository"
 )
 
 type Database struct {
-	mu       sync.RWMutex
-	UserInfo map[string]int
+	Repo *repository.UserRepo
 }
 
 func (d *Database) RegisterUserHandler(w http.ResponseWriter, r *http.Request) {
@@ -34,15 +33,11 @@ func (d *Database) RegisterUserHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	if _, exists := d.UserInfo[user.Name]; exists {
+	err = d.Repo.Create(user)
+	if err == repository.ErrUserAlreadyExists {
 		http.Error(w, "User already exists", http.StatusConflict)
 		return
 	}
-
-	d.UserInfo[user.Name] = user.Age
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
@@ -52,17 +47,14 @@ func (d *Database) RegisterUserHandler(w http.ResponseWriter, r *http.Request) {
 func (d *Database) GetUserHandler(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 
-	d.mu.RLock()
-	value, ok := d.UserInfo[name]
-	d.mu.RUnlock()
-
-	if !ok {
+	user, err := d.Repo.Get(name)
+	if err == repository.ErrUserNotFound {
 		http.Error(w, "User not found", http.StatusNotFound)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(models.User{Name: name, Age: value})
+	json.NewEncoder(w).Encode(user)
 }
 
 func (d *Database) UpdateUserHandler(w http.ResponseWriter, r *http.Request) {
@@ -80,40 +72,24 @@ func (d *Database) UpdateUserHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	_, ok := d.UserInfo[name]
-	if !ok {
+	res, err := d.Repo.Update(name, updatedUser)
+	if err == repository.ErrUserNotFound {
 		http.Error(w, "User not found", http.StatusNotFound)
 		return
 	}
 
-	if updatedUser.Name != "" && updatedUser.Name != name {
-		delete(d.UserInfo, name)
-		d.UserInfo[updatedUser.Name] = updatedUser.Age
-	} else {
-		updatedUser.Name = name
-		d.UserInfo[name] = updatedUser.Age
-	}
-
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(updatedUser)
+	json.NewEncoder(w).Encode(res)
 }
 
 func (d *Database) DeleteUserHandler(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	_, ok := d.UserInfo[name]
-	if !ok {
+	err := d.Repo.Delete(name)
+	if err == repository.ErrUserNotFound {
 		http.Error(w, "User not found", http.StatusNotFound)
 		return
 	}
-
-	delete(d.UserInfo, name)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(models.MessageResponse{
