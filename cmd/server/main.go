@@ -18,12 +18,14 @@ import (
 func main() {
 	logger := slog.Default()
 
-	go func() {
-		slog.Info("pprof server listening on :6060")
+	pprofServer := &http.Server{
+		Addr: "localhost:6060",
+	}
 
-		err := http.ListenAndServe("localhost:6060", nil)
-		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			slog.Error("HTTP server error", "error", err)
+	go func() {
+		slog.Info("pprof server listening on localhost:6060")
+		if err := pprofServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			slog.Error("pprof server error", "error", err)
 		}
 	}()
 
@@ -68,6 +70,10 @@ func main() {
 
 	if err := s.Shutdown(shutdownCtx); err != nil {
 		slog.Error("Shutdown error", "error", err)
+	}
+
+	if err := pprofServer.Shutdown(shutdownCtx); err != nil {
+		slog.Error("pprof server shutdown error", "error", err)
 	}
 
 	slog.Info("Gracefully shutting down.")
